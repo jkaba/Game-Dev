@@ -1,7 +1,5 @@
 # Spaceship Shooter (Open GL)
 
-** NOTE: IN-PROGRESS NOT COMPLETE
-
 OpenGL project on creating  a spaceship shooter
 
 Controls:
