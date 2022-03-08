@@ -1,4 +1,4 @@
-##Sudoku
+Sudoku
 
 This Repo contains code for Sudoku generators/solvers.
 
