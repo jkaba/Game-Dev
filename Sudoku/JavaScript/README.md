@@ -1,6 +1,6 @@
-#Sudoku
+# Sudoku
 
-##JavaScript Sudoku solver
+## JavaScript Sudoku solver
 
 Note: Currently In Progress
 
