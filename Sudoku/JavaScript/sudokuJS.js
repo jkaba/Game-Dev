@@ -838,3 +838,324 @@
 			    return false;
 		    }
 	    }
+
+	    /*
+	    * nakedPair
+	    * Returns effectedCells / updated cells / false
+	    */
+	    function nakedPair(){
+		    return nakedCandidates(2);
+	    }
+
+	    /*
+	    * nakedTriplet
+	    * Returns effectedCells / updated cells / false
+	    */
+	    function nakedTriplet(){
+		    return nakedCandidates(3);
+	    }
+
+	    /*
+	    * nakedQuad
+	    * Returns effectedCells / updated cells / false
+	    */
+	    function nakedQuad(){
+		    return nakedCandidates(4);
+	    }
+
+	    /*
+	    * hiddenLockedCandidates
+	    * Looks for n number of cells in house which together has exactly n unique candidates
+	    */
+	    function hiddenLockedCandidates(n){
+		    // For each type of house
+		    var hlength = houses.length;
+		    for(var i = 0; i < hlength; i++){
+			    // For each house
+			    for(var j = 0; j < boardSize; j++){
+				    var house = houses[i][j];
+				    if(numbersLeft(house).length <= n)
+					    continue;
+				    var combineInfo = [];
+				    var minIndexes = [-1];
+            
+				    // Checks every combo of n candidates
+				    var result = checkLockedCandidates(house, 0);
+				    if(result !== false)
+					    return result;
+			    }
+		    }
+		    return false;
+    
+		    function checkLockedCandidates(house, startIndex){
+			    for(var i = Math.max(startIndex, minIndexes[startIndex]); i <= boardSize - n + startIndex; i++){
+				    minIndexes[startIndex] = i + 1;
+				    minIndexes[startIndex + 1] = i + 1;
+				    var candidates = i + 1;
+				    var possibleCells = cellsForCandidate(candidate, house);
+				    if(possibleCells.length === 0 || possibleCells.length > n)
+					    continue;
+            
+				    // Try to add this candidate and it's cells
+				    if(combineInfo.length > 0){
+					    var temp = possibleCells.slice();
+					    for(var a = 0; a < combineInfo.length; a++){
+						    var cells = combineInfo[a].cells;
+						    for(var b = 0; b < cells.length; b++){
+							    if(!contains(temp, cells[b]))
+								    temp.push(cells[b]);
+						    }
+					    }
+					    if(temp.length > n){
+						    continue;
+					    }
+				    }          
+				    combineInfo.push({candidate: candidate, cells: possibleCells});
+				    if(startIndex < n - 1){
+					    var r = checkLockedCandidates(house, startIndex + 1);
+					    if(r !== false)
+						    return r;
+				    }
+				    // Check if we have matched our pattern
+				    if(combineInfo.length === n){
+					    var combinedCandidates = [];
+					    var cellsWithCandidates = [];
+					    for(var x = 0; x < combineInfo.length; x++){
+						    combinedCandidates.push(combineInfo[x].candidate);
+						    cellsWithCandidates = cellsWithCandidates.concat(combineInfo[x].cells);
+					    }
+					    var candidatesToRemove = [];
+					    for(var c = 0; c < boardSize; c++){
+						    if(!contains(combinedCandidates, c + 1))
+							    candidatesToRemove.push(c + 1);
+					    }
+					    // Remove all other candidates
+					    var cellsUpdated = removeCandidatesFromCells(cellsWithCandidates, candidatesToRemove);
+					    if(cellsUpdated.length > 0){
+						    if(solveMode === SOLVE_MODE_STEP)
+							    highLightCandidatesOnCells(combinedCandidates, cellsWithCandidates);
+						    onlyUpdatedCandidates = true;
+						    return uniqueArray(cellsWithCandidates);
+					    }
+				    }
+			    }      
+			    if(startIndex > 0){
+				    if(combineInfo.length > startIndex - 1){
+					    combineInfo.pop();
+				    }
+			    }
+			    return false;
+		    }
+	    }
+
+	    /*
+	    * hiddenPair
+	    * Returns effected cells / updated cells / false
+	    */
+	    function hiddenPair(){
+		    return hiddenLockedCandidates(2);
+	    }
+
+	    /*
+	    * hiddenTriplet
+	    * Returns effected cells / updated cells / false
+	    */
+	    function hiddenTriplet(){
+		    return hiddenLockedCandidates(3);
+	    }
+
+	    /*
+	    * hiddenQuad
+	    * Returns effected cells / updated cells / false
+	    */
+	    function hiddenQuad(){
+		    return hiddenLockedCandidates(4);
+	    }
+
+	    /*
+	    * solveFn
+	    * Applies strategy ordered by simplicity
+	    */
+	    var nrSolveLoops = 0;
+	    var effectedCells = false;
+	    var solveFn = function(i){
+		    if(boardFinished){
+			    if(!gradingMode){
+				    updateUIBoard(false);
+				    if(typeof opts.boardFinishedFn === "function"){
+					    opts.boardFinishedFn({difficultyInfo: calcBoardDifficulty(usedStrategies)});
+				    }
+			    }
+			    return false;
+		    }
+		    else if(solveMode === SOLVE_MODE_STEP){
+			    if(effectedCells && effectedCells !== -1){
+				    $boardInputs.removeClass("highlight-val");
+				    $(".candidate--highlight").removeClass("candidate--highlight");
+				    for(var j = 0; j < effectedCells.length; j++){
+					    updateUIBoardCell(effectedCells[j]);
+				    }
+			    }
+		    }
+		    nrSolveLoops++;
+		    var strat = strategied[i].fn;
+		    effectedCells = strat();
+		    if(effectedCells === false){
+			    if(strategies.length > i + 1){
+				    return solveFn(i + 1);
+			    }
+			    else{
+				    if(typeof opts.boardErrorFn === "function" && !generatingMode)
+					    opts.boardErrorFn({msg: "No more strategies"});
+				    if(!gradingMode && !generatingMode && solveMode === SOLVE_MODE_ALL)
+					    updateUIBoard(false);
+				    return false;
+			    }
+		    }
+		    else if(boardError){
+			    if(typeof opts.boardErrorFn === "function")
+				    opts.boardErrorFn({msg: "Board incorrect"});
+			    if(solveMode === SOLVE_MODE_ALL){
+				    updateUIBoard(false);
+			    }
+			    return false;
+		    }
+		    else if(solveMode === SOLVE_MODE_STEP){
+			    if(typeof opts.boardUpdatedFn === "function"){
+				    opts.boardUpdatedFn({cause: strategies[i].title, cellsUpdated: effectedCells});
+			    }
+			    if(isBoardFinished()){
+				    boardFinished = true;
+				    if(typeof opts.boardFinishedFn === "function"){
+					    opts.boardFinishedFn({difficultyInfo: calcBoardDifficulty(usedStrategies)});
+				    }
+				    if(candidatesShowing)
+					    updateUIBoard(false);
+			    }
+			    if(!candidatesShowing && !onlyUpdatedCandidates && effectedCells && effectedCells !== -1){
+				    // Remove highlights from last step
+				    $boardInputs.removeClass("highlight-val");
+				    $(".candidate--highlight").removeClass("candidate--highlight");
+				    for(var k = 0; k < effectedCells.length; k++){
+					    updateUIBoardCell(effectedCells[k]);
+				    }
+			    }
+		    }
+		    if(typeof usedStrategies[i] === "undefined")
+			    usedStrategies[i] = 0;
+		    usedStrategies[i] = usedStrategies[i] + 1;
+		    if(!gradingMode && !candidatesShowing && onlyUpdatedCandidates){
+			    showCandidates();
+			    if(typeof opts.candidateShowToggleFn === "function")
+				    opts.candidateShowToggleFn(true);
+		    }
+		    return true;
+	    };
+
+	    /*
+	    * keyboardMoveBoardFocus
+	    * Puts focus on the adjacent board cell
+	    */
+	    var keyboardMoveBoardFocus = function(currentId, keyCode){
+		    var newId = currentId;
+    
+		    // Right
+		    if(keyCode === 39)
+			    newId++;
+    
+		    //Left
+		    else if(keyCode === 37)
+			    newId--;
+    
+		    // Down
+		    else if(keyCode === 40)
+			    newId = newId + boardSize;
+    
+		    // Up
+		    else if(keyCode === 38)
+			    newId = newId - boardSize;
+    
+		    // Out of bounds
+		    if(newId < 0 || newId > (boardSize * boardSize))
+			    return;
+    
+		    // Focus input
+		    $("#input-" + newId).focus();
+	    };
+
+	    /*
+	    * toggleCandidateOnCell
+	    * Used for editing candidates
+	    */
+	    var toggleCandidateOnCell = function(candidate, cell){
+		    var boardCell = board[cell];
+		    if(boardCell.val){
+			    return;
+		    }
+		    var c = boardCell.candidates;
+		    c[candidate - 1] = c[candidate - 1] === null ? candidate : null;
+		    if(solveMode === SOLVE_MODE_STEP)
+			    updateUIBoardCell(cell, {mode: "only-candidates"});
+	    };
+
+	    /*
+	    * keyboardNumberInput
+	    * Update our board model
+	    */
+	    var keyboardNumberInput = function(input, id){
+		    var val = parseInt(input.val());
+		    if(editingCandidates){
+			    toggleCandidateOnCell(val, id);
+			    input.val(board[id].val);
+			    return;
+		    }
+		    var candidates = getNullCandidatesList();
+		    if(val > 0){
+			    // Check that this doesn't cause the board to be incorrect
+			    var temp = housesWithCell(id);
+        
+			    // For each type of house
+			    for(var i = 0; i < houses.length; i++){
+				    if(indexInHouse(val, houses[i][temp[i]])){
+					    var alreadyExistingCellInHouseWithDigit = houses[i][temp[i]][indexInHouse(val, houses[i][temp[i]])];
+					    if(alreadyExistingCellInHouseWithDigit === id)
+						    continue;
+					    $("#input-" + alreadyExistingCellInHouseWithDigit + ", #input-" + id).addClass("board-cell--error");
+					    return;
+				    }
+			    }
+			    // Remove candidates
+			    input.siblings(".candidates").html(buildCandidatesString(candidates));
+			    board[id].candidates = candidates;
+			    board[id].val = val;
+        
+			    if(isBoardFinished()){
+				    boardFinished = true;
+				    if(typeof opts.boardFinishedFn === "function"){
+					    opts.boardFinishedFn({});
+				    }
+			    }
+		    }
+		    else{
+			    boardError = false;
+			    val = null;
+			    candidates = boardNumbers.slice();
+			    input.siblings(".candidates").html(buildCandidatesString(candidates));
+			    board[id].val = val;
+			    resetCandidates();
+			    visualEliminationOfCandidates();
+		    }
+		    if($("#input-" + id).hasClass("board-cell--error"))
+			    $boardInputs.removeClass("board-cell--error");
+		    if(typeof opts.boardUpdatedFn === "function")
+			    opts.boardUpdatedFn({cause: "User input", cellsUpdated: [id]});
+		    onlyUpdatedCandidates = false;
+	    };
+
+	    /*
+	    * toggleShowCandidates
+	    */
+	    var toggleShowCandidates = function(){
+		    $board.toggleClass("showCandidates");
+		    candidatesShowing = !candidatesShowing;
+	    };
