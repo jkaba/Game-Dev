@@ -392,3 +392,449 @@
 				}
 			}
 		};
+	    /*
+	    * setBoardCell
+	    * Does not update UI
+	    */
+	    var setBoardCell = function(cellIndex, val){
+		    var boardCell = board[cellIndex];
+    
+		    // Update val
+		    boardCell.val = val;
+	
+		    if(val !== null)
+			    boardCell.candidates = getNullCandidatesList();
+	    };
+
+	    /*
+	    * indexInHouse
+	    * Returns index (0-9) for digit in house, false if not
+	    */
+	    var indexInHouse = function(digit, house){
+		    for(var i = 0; i < boardSize; i++){
+			    if(board[house[i]].vak === digit)
+				    return i;
+		    }
+		    return false;
+	    };
+
+	    /*
+	    * housesWithCell
+	    * Returns houses which a cell belongs to
+	    */
+	    var housesWithCell = function(cellIndex){
+		    var boxSideSize = Math.sqrt(boardSize);
+		    var houses = [];
+    
+		    // Horizontal row
+		    var hrow = Math.floor(cellIndex/boardSize);
+		    houses.push(hrow);
+ 
+		    // Vertical row
+		    var vrow = Math.floor(cellIndex % boardSize);
+		    houses.push(vrow);
+    		   
+		    // Box
+		    var box = (Math.floor(hrow/boxSideSize) * boxSideSize) + Math.floor(vrow/boxSideSize);
+		    houses.push(box);
+    
+		    return houses;
+	    };
+
+	    /*
+	    * numbersLeft
+	    * Returns unused numbers in a house
+	    */
+	    var numbersLeft = function(house){
+		    var numbers = boardNumbers.slice();
+		    for(var i = 0; i < house.length; i++){
+			    for(varj = 0; j < numbers.length; j++){
+				    // Remove all numbers already in use
+				    if(numbers[i] === board[house[i]].val)
+					    numbers.splice(j,1);
+			    }
+		    }
+		    // Return remaining numbers
+		    return numbers;
+	    };
+
+	    /*
+	    * numbersTaken
+	    * Returns used numbers in a house
+	    */
+	    var numbersTaken = function(house){
+		    var numbers = [];
+		    for(var i = 0; i < house.length; i++){
+			    var n = board[house[i]].val;
+			    if(n !== null)
+				    numbers.push(n)
+		    }
+		    // Return remaining numbers
+		    return numbers;
+	    };
+
+	    /*
+	    * candidatesLeft
+	    * Returns list of candidates for cell (null's removed)
+	    */
+	    var candidatesLeft = function(cellIndex){
+		    var t = [];
+		    var candidates = board[cellIndex].candidates;
+		    for(var i = 0; i < candidates.length; i++){
+			    if(candidates[i] !== null)
+				    t.push(candidates[i]);
+		    }
+		    return t;
+	    };
+
+	    /*
+	    * cellsForCandidate
+	    * Returns list of possible cells for candidate
+	    */
+	    var cellsForCandidate = function(candidate, house){
+		    var t = [];
+		    for(var i = 0; i < house.length; i++){
+			    var cell = board[house[i]];
+			    var candidates = cell.candidates;
+			    if(contains(candidates, candidate))
+				    t.push(house[i]);
+		    }
+		    return t;
+	    };
+
+	    /*
+	    * openSingles
+	    * Checks for houses with 1 empty cell = fills it in board variable if so
+	    */
+	    function openSingles(){
+		    // For each type of house
+		    var hlength = houses.length;
+		    for(var i = 0; i < hlength; i++){
+        
+			    // For each house (up to 9 if finished)
+			    var housesCompleted = 0;
+			    for(var j = 0; j < boardSize; j++){
+				    var emptyCells = [];
+            
+				    // For each empty cell
+				    for(var k = 0; k < boardSize; k++){
+					    var boardIndex = houses[i][j][k];
+					    if(board[boardIndex].val === null){
+						    emptyCells.push({house: houses[i][j], cell: boardIndex});
+						    if(emptyCells.length > 1){
+							    break;
+						    }
+					    }
+				    }
+				    // 1 Empty Cell
+				    if(emptyCells.length === 1){
+					    var emptyCell = emptyCells[0];
+                
+					    // Grab the number to fill in this spot
+					    var val = numbersLeft(emptyCell.house);
+					    if(val.length > 1){
+						    boardError = true;
+						    return -1;
+					    }
+					    setBoardCell(emptyCell.cell, val[0]);
+					    if(solveMode === SOLVE_MODE_STEP)
+						    uIBoardHighlightCandidate(emptyCell.cell, val[0]);
+					    return [emptyCell.cell];
+				    }
+				    // No empty cells
+				    if(emptyCells.length === 0){
+					    housesCompleted++;
+					    if(housesCompleted === boardSize){
+						    boardFinished = true;
+						    return -1;                    
+					    }
+				    }
+			    }
+		    }
+		    return false;
+	    }
+
+	    /*
+	    * visualEliminationOfCandidates
+	    * Always returns false
+	    * Special as it updatesthe whole board in one shot
+	    */
+	    function visualEliminationOfCandidates(){
+		    // For each type of house
+		    var hlength = houses.length;
+		    for(var i = 0; i < hlength; i++){
+       
+			    // For each house
+			    for(var j = 0; j < boardSize; j++){
+				    var house = houses[i][j];
+				    var candidatesToRemove = numbersTaken(house);
+            
+				    // For each cell
+				    for(var k = 0; k < boardSize; k++){
+					    var cell = house[k];
+					    var candidates = board[cell].candidates;
+					    removeCandidatesFromCell(cell, candidatesToRemove);
+				    }
+			    }
+		    }
+		    return false;
+	    }
+
+	    /*
+	    * visualElimination
+	    * Looks for houses where a digit only appears in one spot (we know which digit fits)
+	    * Returns effectedCells / the updated cell / or false
+	    */
+	    function visualElimination(){
+		    // For each type of house
+		    var hlength = houses.length;
+		    for(var i = 0; i < hlength; i++){
+        
+			    // For each house
+			    for(var j = 0; j < boardSize; j++){
+				    var house = houses[i][j];
+				    var digits = numbersLeft(house);
+            
+				    // For each digit remaining in the house
+				    for(var k = 0; k < digits.length; k++){
+					    var digit = digits[k];
+					    var possibleCells = [];
+                
+					    // For each cell in the house
+					    for(var l = 0; l < boardSize; l++){
+						    var cell = house[l];
+						    var boardCell = board[cell];
+                    
+						    // If the digit only appears as a candidate in one slot, that's where it goes
+						    if(contains(boardCell.candidates, digit)){
+							    possibleCells.push(cell);
+							    if(possibleCells.length > 1)
+								    break;
+						    }
+					    }
+					    if(possibleCells.length === 1){
+						    var cellIndex = possibleCells[0];
+						    setBoardCell(cellIndex, digit);
+                   
+						    if(solveMode === SOLVE_MODE_STEP)
+							    uIBoardHighlightCandidate(cellIndex, digit);
+						    onlyUpdatedCandidates = false;
+						    return [cellIndex];
+					    }
+				    }
+			    }
+		    }
+		    return false;
+	    }
+
+	    /*
+	    * singleCandidate
+	    * Looks for cells with only one candidate
+	    */
+	    function singleCandidate(){
+		    // Before starting, we need to update candidates from last round
+		    visualEliminationOfCandidates();
+    
+		    // For each cell
+		    for(var i = 0; i < board.length; i++){
+			    var cell = board[i];
+			    var candidates = cell.candidates;
+        
+			    // For each candidate in that cell
+			    var possibleCandidates = [];
+			    for(var j = 0; j < candidates.length; j++){
+				    if(candidates[j] !== null)
+					    possibleCandidates.push(candidates[j]);
+				    if(possibleCandidates.length > 1)
+					    break;
+			    }
+			    if(possibleCandidates.length === 1){
+				    var digit = possibleCandidates[0];
+				    setBoardCell(i, digit);
+				    if(solveMode === SOLVE_MODE_STEP)
+					    uIBoardHighlightCandidate(i, digit);
+				    onlyUpdatedCandidates = false;
+				    return[i];
+			    }
+		    }
+		    return false;
+	    }
+
+	    /*
+	    * pointingElimination
+	    * If candidates of a type in a box only appear on one row/box, all other same types can be removed
+	    */
+	    function pointingElimination(){
+		    var effectedCells = false;
+    
+		    // For each type of house
+		    var hlength = houses.length;
+		    for(var a = 0; a < hlength; a++){
+			    var houseType = a;
+			    for(var i = 0; i < boardSize; i++){
+				    var house = houses[houseType][i];
+            
+				    // For each digit left in this house
+				    var digits = numbersLeft(house);
+				    for(var j = 0; j < digits.length; j++){
+					    var digit = digits[j];
+                
+					    // Check if digit only appears once
+					    var sameAltHouse = true;
+					    var houseId = -1;
+                
+					    // When checking from box, we need to compare both kinds of rows
+					    var houseTwoId = -1;
+					    var sameAltTwoHouse = true;
+					    var cellsWithCandidate = [];
+                
+					    // For each cell
+					    for(var k = 0; k < house.length; k++){
+						    var cell = house[k];
+                    
+						    if(containts(board[cell].candidates, digit)){
+							    var cellHouses = housesWithCell(cell);
+							    var newHouseId = (houseType === 2) ? cellHouses[0] : cellHouses[2];
+							    var newHouseTwoId = (houseType === 2) ? cellHouses[1] : cellHouses[2];
+
+							    if(cellsWithCandidate.length > 0){
+								    if(newHouseId !== houseId){
+									    sameAltHouse = false
+								    }
+								    if(houseTwoId !== newHouseTwoId){
+									    sameAltTwoHouse = false;
+								    }
+								    if(sameAltHouse === false && sameAltTwoHouse === false){
+									    break;
+								    }
+							    }
+							    houseId = newHouseId;
+							    houseTwoId = newHouseTwoId;
+							    cellsWithCandidate.push(cell);
+						    }
+					    }
+					    if((sameAltHouse === true || sameAltTwoHouse === true) && cellsWithCandidate.length > 0){
+						    // We need to make sure this actually eliminates something
+						    // First what type of house are we talking about
+						    var h = housesWithCell(cellsWithCandidate[0]);
+						    var altHouseType = 2;
+						    if(houseType === 2){
+							    if(sameAltHouse)
+								    altHouseType = 0;
+							    else
+								    altHouseType = 1;
+						    }
+						    var altHouse = houses[altHouseType][h[altHouseType]];
+						    var cellsEffected = [];
+                    
+						    // Need to remove cells with candidates
+						    for(var x = 0; x < altHouse.length; x++){
+							    if(!contains(cellsWithCandidate, altHouse[x])){
+								    cellsEffected.push(altHouse[x]);
+							    }
+						    }
+						    // Remove all candidates on althouse
+						    var cellsUpdated = removeCandidatesFromCells(cellsEffected, [digit]);
+						    if(cellsUpdated.length > 0){
+							    if(solveMode === SOLVE_MODE_STEP)
+								    highLightCandidatesOnCells([digit], cellsWithCandidate);
+							    onlyUpdatedCandidates = true;
+							    return cellsUpdated;
+						    }
+					    }
+				    }
+			    }
+		    }
+		    return false;
+	    }
+
+	    /*
+	    * nakedCandidates
+	    * Looks for n number of cells in a house, which combines has n unique candidates
+	    */
+	    function nakedCandidates(n){
+		    // For each type of house
+		    var hlength = houses.length;
+		    for(var i = 0; i < hlength; i++){
+			    // For each such house
+			    for(var j = 0; j < boardSize; j++){
+				    var house = houses[i][j];
+				    if(numbersLeft(house).length <= n)
+					    // Can't remove any candidates
+					    continue;
+				    var combineInfo = [];
+				    var minIndexes = [-1];
+            
+				    // Check every combo of candidates in house
+				    var result = checkCombinedCandidates(house, 0);
+				    if(result !== false)
+					    return result;
+			    }
+		    }
+		    return false;
+    
+		    function checkCombinedCandidates(house, startIndex){
+			    for(var i = Math.max(startIndex, minIndexes[startIndex]); i < boardSize - n + startIndex; i++){
+				    minIndexes[startIndex] = i+1;
+				    minIndexes[startIndex+1] = i+1;
+				    var cell = house[i];
+				    var cellCandidates = candidatesLeft(cell);
+				    if(cellCandidates.length === 0 || cellCandidates.length > n)
+					    continue;
+            
+				    // Try to add this cell, but check to make sure that it doesn't interfere
+				    if(combineInfo.length > 0){
+					    var temp = cellCandidates.slice)();
+					    for(var a = 0; a < combineInfo.length; a++){
+						    var candidates = combineInfo[a].candidates;
+						    for(var b = 0; b < candidates.length; b++){
+							    if(!contains(temp, candidates[b]))
+								    temp.push(candidates[b];
+									      
+						    }
+					    }
+					    if(temp.length > n){
+						    continue;
+					    }
+				    }
+				    combineInfo.push({cell: cell, candidates: cellCandidates});
+				    if(startIndex < n - 1){
+					    // Need to go deeper into the combo
+					    var r = checkCombinedCandidates(house, startIndex + 1);
+					    if(r !== false)
+						    return r;
+				    }
+				    // Check to see if we matched our pattern
+				    if(combineInfo.length === n){
+					    // Check to see if any candidates get eliminated
+					    var cellsWithCandidates = [];
+					    var combinedCandidates = [];
+					    for(var x = 0; x < combineInfo.length; x++){
+						    cellsWithCandidates.push(combineInfo[x].cell);
+						    combinedCandidates = combinedCandidates.concat(combineInfo[x].candidates);
+					    }
+					    // Get all cells in the house except the cells with candidates
+					    var cellsEffected = [];
+					    for(var y = 0; y < boardSize; y++){
+						    if(!contains(cellsWithCandidates, house[y])){
+							    cellsEffected.push(house[y]);
+						    }
+					    }
+					    // Remove all candidates in house, except the cells matched in the pattern
+					    var cellsUpdated = removeCandidatesFromCells(cellsEffected, combinedCandidates);
+					    if(cellsUpdated.length > 0){
+						    if(solveMode === SOLVE_MODE_STEP)
+							    highLightCandidatesOnCells(combinedCandidates, cellsWithCandidates);
+						    onlyUpdatedCandidates = true;
+						    return uniqueArray(cellsUpdated);
+					    }
+				    }
+			    }
+			    if(startIndex > 0){
+				    if(combineInfo.length > startIndex - 1){
+					    combineInfo.pop();
+				    }
+			    }
+			    return false;
+		    }
+	    }
