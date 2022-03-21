@@ -1159,3 +1159,280 @@
 		    $board.toggleClass("showCandidates");
 		    candidatesShowing = !candidatesShowing;
 	    };
+	    
+	    /*
+	    * analyzeBoard
+	    * Solves a copy of the current board
+	    */
+	    var analyzeBoard = function(){
+		    gradingMode = true;
+		    solveMode = SOLVE_MODE_ALL;
+		    var usedStrategiesClone = JSON.parse(JSON.stringify(usedStrategies));
+		    var boardClone = JSON.parse(JSON.stringify(board));
+		    var canContinue = true;
+		    while(canContinue){
+			    var startStrat = onlyUpdatedCandidates ? 2 : 0;
+			    canContinue = solveFn(startStrat);
+		    }
+		    var data = {};
+		    if(boardError){
+			    data.error = "Board incorrect";
+		    }
+		    else{
+			    data.finished = boardFinished;
+			    data.usedStrategies = [];
+			    for(var i = 0; i < usedStrategies.length; i++){
+				    var strat = strategies[i];
+				    if(typeof usedStrategies[i] !== "undefined"){
+					    data.usedStrategies[i] = {title: strat.title, freq: usedStrategies[i]};
+				    }
+			    }
+			    if(boardFinished){
+				    var boardDiff = calcBoardDifficulty(usedStrategies);
+				    data.level = boardDiff.level;
+				    data.score = boardDiff.score;
+			    }
+		    }
+		    // Restore everthing to state prior to solving
+		    resetBoardVariables();
+		    usedStrategies = usedStrategiesClone;
+		    board = boardClone;
+		    return data;
+	    };
+
+	    var setBoardCellWithRandomCandidate = function(cellIndex, forceUIUpdate){
+		    visualEliminationOfCandidates();
+		    var invalids = invalidCandidates && invalidCandidates[cellIndex];
+		    var candidates = board[cellIndex].candidates.filter(function(candidate){
+			    if(!candidate || (invalids && contains(invalids, candidate)))
+				    return false;
+			    return candidate;
+		    });
+		    // If cell has 0 candidates, fail to set
+		    if(candidates.length === 0){
+			    return false;
+		    }
+		    var randIndex = Math.round(Math.random() * (candidates.length - 1));
+		    var randomCandidate = candidates[randIndex];
+		    setBoardCell(cellIndex, randomCandidate);
+		    return true;
+	    };
+
+	    var generateBoardAnswerRecursively = function(cellIndex){
+		    if((cellIndex + 1) > (boardSize * boardSize)){
+			    invalidCandidates = [];
+			    return true;
+		    }
+		    if(setBoardCellWithRandomCandidate(cellIndex)){
+			    generateBoardAnswerRecursively(cellIndex + 1);
+		    }
+		    else{
+			    if(cellIndex <= 0)
+				    return false;
+			    var lastIndex = cellIndex - 1;
+			    invalidCandidates[lastIndex] = invalidCandidates[lastIndex] || [];
+			    invalidCandidates[lastIndex].push(board[lastIndex].val);
+        
+			    // Set val back to null
+			    setBoardCell(lastIndex, null);
+        
+			    // Reset candidates in model
+			    resetCandidates(false);
+        
+			    // Reset invalid candidates
+			    invalidCandidates[cellIndex] = [];
+        
+			    // Try again
+			    generateBoardAnswerRecursively(lastIndex);
+			    return false;
+		    }
+	    };
+
+	    var easyEnough = function(data){
+		    if(data.level === DIFFICULTY_EASY)
+			    return true;
+		    if(data.level === DIFFICULTY_MEDIUM)
+			    return difficulty !== DIFFICULTY_EASY;
+		    if(data.level === DIFFICULTY_HARD)
+			    return difficulty !== DIFFICULTY_EASY && difficulty !== DIFFICULTY_MEDIUM;
+		    if(data.level === DIFFICULTY_VERY_HARD)
+			    return difficulty !== DIFFICULTY_EASY && difficulty !== DIFFICULTY_MEDIUM && difficulty !== DIFFICULTY_HARD;
+	    };
+
+	    var hardEnough = function(data) {
+		    if(difficulty === DIFFICULTY_EASY)
+			    return true;
+		    if(difficulty === DIFFICULTY_MEDIUM)
+			    return data.level !== DIFFICULTY_EASY;
+		    if(difficulty === DIFFICULTY_HARD)
+			    return data.level !== DIFFICULTY_EASY && data.level !== DIFFICULTY_MEDIUM;
+		    if(difficulty === DIFFICULTY_VERY_HARD)
+			    return data.level !== DIFFICULTY_EASY && data.level !== DIFFICULTY_MEDIUM && data.level !== DIFFICULTY_HARD;
+	    };
+
+	    var digCells = function(){
+		    var cells = [];
+		    var given = boardSize * boardSize;
+		    var minGiven = 17;
+		    if(difficulty === DIFFICULTY_EASY){
+			    minGiven = 40;
+		    }
+		    else if(difficulty == DIFFICULTY_MEDIUM){
+			    minGiven = 30;
+		    }
+		    if(boardSize < 9){
+			    minGiven = 4;
+		    }
+		    for(var i = 0; i < boardSize * boardSize; i++){
+			    cells.push(i);
+		    }
+		    while(cells.length > 0 && given > minGiven){
+			    var randIndex = Math.round(Math.random() * (cell.length - 1));
+			    var cellIndex = cells.splice(randIndex, 1);
+			    var val = board[cellIndex].val;
+        
+			    // Remove value from this cell
+			    setBoardCell(cellIndex, null);
+			    resetCandidates(false);
+        
+			    var data = analyzeBoard();
+			    if(data.finished !== false && easyEnough(data)){
+				    given--;
+			    }
+			    else{
+				    setBoardCell(cellIndex,val);
+			    }
+		    }
+	    };
+
+	    /*
+	    * generateBoard
+	    * Generates board puzzle
+	    */
+	    var generateBoard = function(diff, callback){
+		    if($boardInputs)
+			    clearBoard();
+		    if(contains(DIFFICULTIES, diff)){
+			    difficulty = diff;
+		    }
+		    else if(boardSize >= 9){
+			    difficulty = DIFFICULTY_MEDIUM;
+		    }
+		    else {
+			    difficulty = DIFFICULTY_EASY;
+		    }
+		    generatingMode = true;
+		    solveMode = SOLVE_MODE_ALL;
+		    generateBoardAnswerRecursively(0);
+    
+		    // Attempt 1: Save answer, dig multiple times
+		    var boardAnswer = board.slice();
+		    var boardTooEasy = true;
+		    while(boardTooEasy){
+			    digCells();
+			    var data = analyzeBoard();
+			    if(hardEnough(data))
+				    boardTooEasy = false;
+			    else
+				    board = boardAnswer;
+		    }
+		    solveMode = SOLVE_MODE_STEP;
+		    if($boardInputs)
+			    updateUIBoard();
+		    visualEliminationOfCandidates();
+		    if(typeof callback === 'function'){
+			    callback();
+		    }
+	    };
+
+	    /*
+	    * init / API / events
+	    */
+	    if(!opts.board){
+		    initBoard(opts);
+		    generateBoard(opts);
+		    renderBoard();
+	    }
+	    else{
+		    board = opts.board;
+		    initBoard();
+		    renderBoard();
+		    visualEliminationOfCandidates();
+	    }
+
+	    $boardInputs.on("keyup", function(e){var $this = $(this);
+						 var id = parseInt($this.attr("id").replace("input-", ""));
+    
+						 // Allow keyboard movements
+						 if(e.keyCode >= 37 && e.keyCode <= 40){
+							 keyboardMoveBoardFocus(id, e.keyCode);
+						 }
+						});
+
+
+	    // Listen on change, val incorrect at all times leading to filtering out other keys
+	    $boardInputs.on("change", function(){
+		    var $this = $(this);
+		    var id = parseInt($this.attr("id").replace("input-", ""));
+		    keyboardNumberInput($this, id);
+	    });
+
+	    /*
+	    * Public methods
+	    */
+	    var solveAll = function(){
+		    solveMode = SOLVE_MODE_ALL;
+		    var canContinue = true;
+		    while(canContinue){
+			    var startStrat =  onlyUpdatedCandidates ? 2 : 0;
+			    canContinue = solveFn(startStrat);
+		    }
+	    };
+
+	    var solveStep = function(){
+		    solveMode = SOLVE_MODE_STEP;
+		    var startStrat = onlyUpdatedCandidates ? 2 : 0;
+		    solveFn(startStrat);
+	    };
+
+	    var getBoard = function(){
+		    return board;
+	    };
+
+	    var setBoard = function(newBoard){
+		    clearBoard();
+		    board = newBoard;
+		    initBoard();
+		    visualEliminationOfCandidates();
+		    updateUIBoard(false);
+	    };
+
+	    var hideCandidates = function(){
+		    $board.removeClass("showCandidates");
+		    candidatesShowing = false;
+	    };
+
+	    var showCandidates = function(){
+		    $board.addClass("showCandidates");
+		    candidatesShowing = true;
+	    };
+
+	    var setEditingCandidates = function(newVal){
+		    editingCandidates = newVal;
+	    };
+
+
+	    return{
+		    solveAll : solveAll,
+		    solveStep : solveStep,
+		    analyzeBoard : analyzeBoard,
+		    clearBoard : clearBoard,
+		    getBoard : getBoard,
+		    setBoard : setBoard,
+		    hideCandidates : hideCandidates,
+		    showCandidates : showCandidates,
+		    setEditingCandidates : setEditingCandidates,
+		    generateBoard : generateBoard
+	    };
+    };
+})(window, jQuery);
