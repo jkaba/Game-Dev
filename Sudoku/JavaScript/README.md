@@ -2,8 +2,6 @@
 
 ## JavaScript Sudoku solver
 
-Note: Currently In Progress
-
 This implementation of Sudoku in JavaScript can generate sudoku puzzles of various difficulties.
 It can also solve the puzzles as well, via a step by step solver which implements basic strategies.
 
