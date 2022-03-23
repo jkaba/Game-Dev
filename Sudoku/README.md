@@ -2,7 +2,7 @@
 
 This Repo contains code for Sudoku generators/solvers.
 
-- Sudoku JavaScript (Incomplete)
+- Sudoku JavaScript 
 This contains the code for the JavaScript implementation of a Sudoku generator + Solver
 
 - Sudoku C++ (Incomplete)
