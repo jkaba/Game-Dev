@@ -1,6 +1,6 @@
 # Sudoku-Generator
   
-A Sudoku puzzle generator written in C++. (Incomplete)
+A Sudoku puzzle generator written in C++. 
 
 ## Steps to Use:
 
